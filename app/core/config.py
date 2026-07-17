@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # This tells pydantic-settings to look for a .env file
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    CHROMA_COLLECTION_NAME: str = "catsi_documents"
 
 # Create a single instance that we can import anywhere
 settings = Settings()

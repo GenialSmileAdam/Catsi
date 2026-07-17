@@ -1,7 +1,8 @@
 from sqlalchemy import String, Boolean, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 from datetime import datetime
+from .document import Document
 
 class User(Base):
     __tablename__ = "users"
@@ -17,3 +18,6 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+    documents: Mapped[list["Document"]] = relationship("Document", back_populates="user")

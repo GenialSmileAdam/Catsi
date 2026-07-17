@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from app.schemas.user import UserResponse
 from app.api.v1.dependencies import get_current_user
 from app.models.user import User
+import app.models
 
 # This lifespan runs startup/shutdown logic
 @asynccontextmanager
