@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     CHROMA_COLLECTION_NAME: str = "catsi_documents"
-    #
-    # LANGSMITH_API_KEY: str = "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"
-    # LANGSMITH_TRACING: str = 'true'
-    # LANGSMITH_ENDPOINT: str  = "https://api.smith.langchain.com"
-    # LANGSMITH_PROJECT: str = "Catsi"
+
+    LANGSMITH_API_KEY: str = "from env"
+    LANGSMITH_TRACING: str = 'true'
+    LANGSMITH_ENDPOINT: str  = "https://api.smith.langchain.com"
+    LANGSMITH_PROJECT: str = "Catsi"
 
 # Create a single instance that we can import anywhere
 settings = Settings()
