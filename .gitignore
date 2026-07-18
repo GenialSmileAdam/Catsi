@@ -29,3 +29,6 @@ catsi.db
 .mypy_cache/
 .ruff_cache/
 .coverage
+
+
+app/core/config.py
