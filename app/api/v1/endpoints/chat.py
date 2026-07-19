@@ -1,12 +1,12 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage
 from app.core.config import settings
 from app.api.v1.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.chat import ChatResponse, ChatRequest
-
+from app.services.vector_store import search_similar
+from langchain_core.messages import SystemMessage, HumanMessage
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -15,27 +15,40 @@ async def chat(
     chat_request: ChatRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Simple chat endpoint. Sends the user's message to the Ollama LLM
-    and returns the generated reply.
-    """
-    # Create the LangChain ChatOllama instance for our configured model
+    user_message = chat_request.message
+
+    # ---- RAG Step 1: Retrieve relevant document chunks ----
+    retrieved_chunks = await search_similar(user_message, top_k=3)
+    if not retrieved_chunks:
+        # No documents? Just answer without context.
+        context_text = ""
+    else:
+        context_text = "\n\n".join([f"---\n{chunk}" for chunk in retrieved_chunks])
+
+    # ---- RAG Step 2: Build the prompt ----
+    system_prompt = (
+        "You are a helpful assistant. Use the following pieces of context to answer the user's question.\n"
+        "If the answer is not in the context, say you don't know. Do not make up information.\n\n"
+        f"Context:\n{context_text}"
+    )
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_message),
+    ]
+
+    # ---- RAG Step 3: Call the LLM ----
     llm = ChatOllama(
         model=settings.CHAT_MODEL,
         base_url=settings.OLLAMA_BASE_URL,
         temperature=0.7,
     )
-
-    # The model expects a list of messages. We'll only send the user message.
-    messages = [HumanMessage(content=chat_request.message)]
-
     try:
         ai_message = await asyncio.to_thread(llm.invoke, messages)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"LLM call failed: {str(e)}",
-        )
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
-    # Extract the text content from the AI response
-    return ChatResponse(response=ai_message.content)
+    # Return the answer + the sources so you can see what was retrieved
+    return ChatResponse(
+        response=ai_message.content,
+        sources=retrieved_chunks,
+    )

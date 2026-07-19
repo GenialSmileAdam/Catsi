@@ -45,6 +45,9 @@ async def debug_env():
     import os
     return {
         "LANGCHAIN_TRACING": os.environ.get("LANGCHAIN_TRACING"),
+        "LANGCHAIN_TRACING_V2": os.environ.get("LANGCHAIN_TRACING_V2"),
+        "LANGCHAIN_HANDLER": os.environ.get("LANGCHAIN_HANDLER"),
         "LANGCHAIN_PROJECT": os.environ.get("LANGCHAIN_PROJECT"),
+        "LANGCHAIN_ENDPOINT": os.environ.get("LANGCHAIN_ENDPOINT"),
         "LANGCHAIN_API_KEY": os.environ.get("LANGCHAIN_API_KEY", "***")[:8] + "...",
     }

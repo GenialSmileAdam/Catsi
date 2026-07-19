@@ -32,3 +32,4 @@ catsi.db
 
 
 app/core/config.py
+/chroma_data

@@ -3,6 +3,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 from langchain_ollama import OllamaEmbeddings
 from app.core.config import settings
+from pprint import pprint
 
 
 # Global client and collection (initialized lazily)
@@ -77,3 +78,33 @@ async def delete_document_chunks(document_id: int) -> None:
         collection.delete,
         where={"document_id": document_id},
     )
+
+async def search_similar(
+    query: str,
+    top_k: int = 4,
+) -> list[str]:
+    """
+    Given a query string, embed it, retrieve the most similar chunks
+    from ChromaDB, and return their text content.
+    """
+    # 1. Embed the query (same model as documents)
+    embeddings_model = OllamaEmbeddings(
+        model=settings.EMBEDDING_MODEL,
+        base_url=settings.OLLAMA_BASE_URL,
+    )
+    # embed_query returns a single embedding vector
+    query_embedding = await asyncio.to_thread(embeddings_model.embed_query, query)
+
+    # 2. Search ChromaDB
+    collection = get_or_create_collection()
+    results = await asyncio.to_thread(
+        collection.query,
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents"],   # we want the chunk text
+    )
+
+    # 3. Extract chunk texts (results is a dict, docs are in "documents" key)
+    pprint(results)
+    chunks = results.get("documents", [[]])[0]   # list of strings
+    return chunks
