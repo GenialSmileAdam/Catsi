@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.document import Document
 from app.schemas.document import DocumentUploadResponse
 from app.services.document_parser import validate_file, extract_text_from_file
+from app.services.document_processor import process_document_async
 from app.services.chunking import chunk_text
 from app.services.vector_store import embed_and_store
 from sqlalchemy import select
@@ -16,6 +17,7 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Upload a document, parse it, and store metadata + text."""
     # 1. Validate file type and size
@@ -36,6 +38,8 @@ async def upload_document(
     db.add(document)
     await db.commit()
     await db.refresh(document)
+
+    background_tasks.add_task(process_document_async, document.id)
 
     # 4. Return response with preview
     preview = extracted_text[:500] if extracted_text else None

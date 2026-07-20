@@ -3,9 +3,8 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 from langchain_ollama import OllamaEmbeddings
 from app.core.config import settings
-from pprint import pprint
-
-
+from app.services.query_translation import generate_multi_queries
+from langsmith import traceable
 # Global client and collection (initialized lazily)
 _client = None
 _collection = None
@@ -54,7 +53,7 @@ async def embed_and_store(
     )
 
     # Generate embeddings (this may be a long-running task)
-    embeddings = await asyncio.to_thread(embeddings_model.embed_documents, chunks)
+    embeddings = await embeddings_model.aembed_documents(chunks)
 
     # Prepare metadata for each chunk
     metadata = [{"document_id": document_id} for _ in chunks]
@@ -82,7 +81,7 @@ async def delete_document_chunks(document_id: int) -> None:
 async def search_similar(
     query: str,
     top_k: int = 4,
-) -> list[str]:
+) ->  list[tuple[str, str]]:
     """
     Given a query string, embed it, retrieve the most similar chunks
     from ChromaDB, and return their text content.
@@ -93,7 +92,7 @@ async def search_similar(
         base_url=settings.OLLAMA_BASE_URL,
     )
     # embed_query returns a single embedding vector
-    query_embedding = await asyncio.to_thread(embeddings_model.embed_query, query)
+    query_embedding = await embeddings_model.aembed_query(query)
 
     # 2. Search ChromaDB
     collection = get_or_create_collection()
@@ -105,6 +104,27 @@ async def search_similar(
     )
 
     # 3. Extract chunk texts (results is a dict, docs are in "documents" key)
-    pprint(results)
-    chunks = results.get("documents", [[]])[0]   # list of strings
-    return chunks
+    ids = results.get("ids", [[]])[0]
+    docs = results.get("documents", [[]])[0]   # list of strings
+    return list(zip(ids, docs))
+
+@traceable()
+async def multi_query_retrieval(
+    question: str,
+    top_k_per_query: int = 4,
+    num_queries: int = 3,
+) -> list[str]:
+    """
+    Generate multiple query variants, retrieve for each, deduplicate, and return chunk texts.
+    """
+
+    queries = await generate_multi_queries(question, num_queries)
+    # Retrieve for each query
+    all_chunks: dict[str, str] = {}  # id -> text, for deduplication
+    for q in queries:
+        results = await search_similar(q, top_k=top_k_per_query)
+        for chunk_id, text in results:
+            if chunk_id not in all_chunks:
+                all_chunks[chunk_id] = text
+    # Return only the texts (in no particular order)
+    return list(all_chunks.values())

@@ -1,11 +1,11 @@
-import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from langchain_ollama import ChatOllama
 from app.core.config import settings
 from app.api.v1.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.chat import ChatResponse, ChatRequest
-from app.services.vector_store import search_similar
+from app.services.vector_store import multi_query_retrieval
 from langchain_core.messages import SystemMessage, HumanMessage
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -18,7 +18,8 @@ async def chat(
     user_message = chat_request.message
 
     # ---- RAG Step 1: Retrieve relevant document chunks ----
-    retrieved_chunks = await search_similar(user_message, top_k=3)
+    retrieved_chunks = await multi_query_retrieval(user_message, top_k_per_query=3, num_queries=3)
+
     if not retrieved_chunks:
         # No documents? Just answer without context.
         context_text = ""
@@ -43,7 +44,7 @@ async def chat(
         temperature=0.7,
     )
     try:
-        ai_message = await asyncio.to_thread(llm.invoke, messages)
+        ai_message = await llm.ainvoke(messages)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 

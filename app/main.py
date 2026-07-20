@@ -8,6 +8,10 @@ from app.api.v1.dependencies import get_current_user
 from app.models.user import User
 import app.models
 import asyncio
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 # This lifespan runs startup/shutdown logic
