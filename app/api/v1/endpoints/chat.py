@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.api.v1.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.chat import ChatResponse, ChatRequest
+from app.services.reranker import rerank_chunks
 from app.services.vector_store import multi_query_retrieval
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -17,16 +18,19 @@ async def chat(
 ):
     user_message = chat_request.message
 
-    # ---- RAG Step 1: Retrieve relevant document chunks ----
-    retrieved_chunks = await multi_query_retrieval(user_message, top_k_per_query=3, num_queries=3)
+    # ---- RAG Step 1:Multi-query Retrieval for retrieving relevant document chunks ----
+    candidate_chunks = await multi_query_retrieval(user_message, top_k_per_query=5, num_queries=3)
 
-    if not retrieved_chunks:
+    #----- RAG step 2: Rerank the chunks-----
+    reranked_chunks= await rerank_chunks(user_message, candidate_chunks)
+
+    if not reranked_chunks:
         # No documents? Just answer without context.
         context_text = ""
     else:
-        context_text = "\n\n".join([f"---\n{chunk}" for chunk in retrieved_chunks])
+        context_text = "\n\n".join([f"---\n{chunk}" for chunk in reranked_chunks])
 
-    # ---- RAG Step 2: Build the prompt ----
+    # ---- RAG Step 3: Build the prompt ----
     system_prompt = (
         "You are a helpful assistant. Use the following pieces of context to answer the user's question.\n"
         "If the answer is not in the context, say you don't know. Do not make up information.\n\n"
@@ -37,7 +41,7 @@ async def chat(
         HumanMessage(content=user_message),
     ]
 
-    # ---- RAG Step 3: Call the LLM ----
+    # ---- RAG Step 4: Call the LLM ----
     llm = ChatOllama(
         model=settings.CHAT_MODEL,
         base_url=settings.OLLAMA_BASE_URL,
@@ -51,5 +55,5 @@ async def chat(
     # Return the answer + the sources so you can see what was retrieved
     return ChatResponse(
         response=ai_message.content,
-        sources=retrieved_chunks,
+        sources=reranked_chunks,
     )
