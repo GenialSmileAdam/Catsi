@@ -9,13 +9,12 @@ async def generate_multi_queries(question: str, num_queries: int = 3) -> list[st
     Returns the original question plus the generated ones.
     """
     system_prompt = (
-     f"You are an AI language model assistant.Your task is to generate {num_queries}"
-    "different versions of the given user question to retrieve relevant documents from a vector"
-    "database.By generating multiple perspectives on the user question, your goal is to help"
-    " the user overcome some of the limitations of the distance-based similarity search."
-    " Provide these alternative questions separated by newlines."
+        "You are a helpful assistant. Your task is to generate alternative versions "
+        "of a user's question to improve document retrieval. "
+        "Output each question on a new line. Do NOT number them, do NOT say 'Version 1', "
+        "just output the questions themselves, one per line."
     )
-    user_message = f"Original question: {question}"
+    user_message = f"User question: {question}\nGenerate {num_queries} alternative questions."
 
     llm = ChatOllama(
         model=settings.CHAT_MODEL,
@@ -24,8 +23,21 @@ async def generate_multi_queries(question: str, num_queries: int = 3) -> list[st
     )
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_message)]
     response = await llm.ainvoke(messages)
-    # The response should be one question per line
-    lines = [line.strip() for line in response.content.splitlines() if line.strip()]
+    raw_text = response.content.strip()
+
+    # Clean each line: remove any leading "Version X:", numbering, etc.
+    lines = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Remove common prefixes like "1.", "Version 1:", "Question 1:", etc.
+        import re
+        # Remove leading numbers, dots, colons, and word "Version" patterns
+        cleaned = re.sub(r'^(?:\d+[.)]\s*|Version\s*\d+:\s*|Question\s*\d+:\s*)', '', line).strip()
+        if cleaned:
+            lines.append(cleaned)
+
     # Include the original question
     all_queries = [question] + lines[:num_queries]
     return all_queries

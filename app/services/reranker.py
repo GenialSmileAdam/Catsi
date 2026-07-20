@@ -1,5 +1,7 @@
 import asyncio
 from sentence_transformers import CrossEncoder
+from langsmith import traceable
+from fastapi.logger import logger
 
 # We'll load the model once, lazily.
 _reranker_model = None
@@ -16,6 +18,7 @@ def get_reranker_model() -> CrossEncoder:
         )
     return _reranker_model
 
+@traceable()
 async def rerank_chunks(query: str, chunks: list[str], top_k: int = 4) -> list[str]:
     """
     Given a query and a list of chunk texts, use the cross-encoder to
@@ -39,6 +42,8 @@ async def rerank_chunks(query: str, chunks: list[str], top_k: int = 4) -> list[s
     )
 
     top_chunks = [chunk for chunk, score in scored_chunks[:top_k]]
-    print(scored_chunks)
-    print(top_chunks)
+
+
+    logger.debug(f"Scored chunks: {scored_chunks}")
+    logger.debug(f"Top chunks: {top_chunks}")
     return top_chunks

@@ -21,8 +21,16 @@ async def chat(
     # ---- RAG Step 1:Multi-query Retrieval for retrieving relevant document chunks ----
     candidate_chunks = await multi_query_retrieval(user_message, top_k_per_query=5, num_queries=3)
 
+    # Remove duplicate texts (keep order of first occurrence)
+    seen = set()
+    unique_candidates = []
+    for chunk in candidate_chunks:
+        if chunk not in seen:
+            seen.add(chunk)
+            unique_candidates.append(chunk)
+
     #----- RAG step 2: Rerank the chunks-----
-    reranked_chunks= await rerank_chunks(user_message, candidate_chunks)
+    reranked_chunks= await rerank_chunks(user_message, unique_candidates, top_k = 4)
 
     if not reranked_chunks:
         # No documents? Just answer without context.

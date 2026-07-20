@@ -30,7 +30,7 @@ def get_or_create_collection():
         )
     return _collection
 
-
+@traceable()
 async def embed_and_store(
     document_id: int,
     chunks: list[str],
@@ -68,7 +68,7 @@ async def embed_and_store(
         documents=chunks,
         metadatas=metadata,
     )
-
+@traceable()
 async def delete_document_chunks(document_id: int) -> None:
     """Remove all chunks associated with a document from ChromaDB."""
     collection = get_or_create_collection()
@@ -78,6 +78,7 @@ async def delete_document_chunks(document_id: int) -> None:
         where={"document_id": document_id},
     )
 
+@traceable()
 async def search_similar(
     query: str,
     top_k: int = 4,
