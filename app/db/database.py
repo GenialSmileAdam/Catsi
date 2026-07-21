@@ -5,7 +5,7 @@ from app.core.config import settings
 # The engine connects to the database. 'echo=True' logs all SQL (good for debugging).
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=False,
 )
 
 # A session factory. Calling it creates a new async database session.

@@ -1,5 +1,13 @@
-from fastapi import FastAPI, Depends
+from app.core.logger import setup_logging
+setup_logging()
+
 from app.core.config import settings
+import logging
+
+if settings.DEBUG:
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+
+from fastapi import FastAPI, Depends
 from app.api.v1.router import router as v1_router
 from app.db.database import engine, Base
 from contextlib import asynccontextmanager
@@ -8,6 +16,8 @@ from app.api.v1.dependencies import get_current_user
 from app.core.rate_limiter import limiter
 from fastapi.responses import JSONResponse
 from fastapi import Request
+import time
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
 from app.models.user import User
 import app.models
@@ -37,10 +47,24 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
+
+logger = logging.getLogger(__name__)
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        duration = time.time() - start
+        logger.info(
+            f"{request.method} {request.url.path} | {response.status_code} | {duration:.3f}s"
+        )
+        return response
+
 app.include_router(v1_router)
 
 # Attach the limiter to the app state (needed for the middleware)
 app.state.limiter = limiter
+app.add_middleware(LoggingMiddleware)
 
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(

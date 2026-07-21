@@ -5,9 +5,14 @@ from langchain_ollama import OllamaEmbeddings
 from app.core.config import settings
 from app.services.query_translation import generate_multi_queries
 from langsmith import traceable
+import logging
+
 # Global client and collection (initialized lazily)
 _client = None
 _collection = None
+
+logger = logging.getLogger(__name__)
+
 
 def get_chroma_client():
     """Return a persistent ChromaDB client (singleton)."""
@@ -39,6 +44,7 @@ async def embed_and_store(
     Generate embeddings for each chunk using Ollama and store them in ChromaDB.
     The chunks are associated with the document_id for later retrieval/filtering.
     """
+    logger.info(f"Embedding and storing {len(chunks)} chunks for document {document_id}")
     if not chunks:
         return
 
@@ -61,6 +67,7 @@ async def embed_and_store(
 
     # Add to Chroma collection (also sync)
     collection = get_or_create_collection()
+
     await asyncio.to_thread(
         collection.add,
         ids=ids,
@@ -68,15 +75,20 @@ async def embed_and_store(
         documents=chunks,
         metadatas=metadata,
     )
+    logger.debug(f"Chunks embedded successfully for document {document_id}")
+
 @traceable()
 async def delete_document_chunks(document_id: int) -> None:
     """Remove all chunks associated with a document from ChromaDB."""
+    logger.info(f"Starting document chunks deletion of document {document_id}")
+
     collection = get_or_create_collection()
     # ChromaDB delete uses a where filter on metadata
     await asyncio.to_thread(
         collection.delete,
         where={"document_id": document_id},
     )
+    logger.debug(f"Deleted document {document_id} chunks")
 
 @traceable()
 async def search_similar(
@@ -118,6 +130,7 @@ async def multi_query_retrieval(
     """
     Generate multiple query variants, retrieve for each, deduplicate, and return chunk texts.
     """
+    logger.info(f"Starting multi-query retrieval for: '{question[:80]}...'")
 
     queries = await generate_multi_queries(question, num_queries)
     # Retrieve for each query
@@ -128,4 +141,7 @@ async def multi_query_retrieval(
             if chunk_id not in all_chunks:
                 all_chunks[chunk_id] = text
     # Return only the texts (in no particular order)
+
+    logger.debug(f"Retrieved {len(all_chunks)} unique chunks")
+
     return list(all_chunks.values())

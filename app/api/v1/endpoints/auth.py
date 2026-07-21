@@ -7,6 +7,9 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.core.rate_limiter import limiter, user_limiter
 from app.api.v1.dependencies import get_db
 from sqlalchemy import select
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -14,6 +17,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user."""
     # Check if username or email already exists
+
     existing = await db.execute(
         select(User).where(
             or_(
@@ -39,6 +43,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(db_user)   # get the id and timestamps from DB
     return db_user
+
 
 @router.post("/login", response_model=Token)
 @limiter.limit("5/minute")

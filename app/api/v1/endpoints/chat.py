@@ -9,10 +9,13 @@ from app.services.reranker import rerank_chunks
 from app.services.vector_store import multi_query_retrieval
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.core.rate_limiter import limiter, user_limiter
+import time
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-@router.post("/", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 @limiter.limit("10/minute")
 @user_limiter.limit("20/minute")
 async def chat(
@@ -20,10 +23,15 @@ async def chat(
     chat_request: ChatRequest,
     current_user: User = Depends(get_current_user),
 ):
+    logger.info(f"User {current_user.id} asked: '{chat_request.message[:80]}...'")
     user_message = chat_request.message
 
     # ---- RAG Step 1:Multi-query Retrieval for retrieving relevant document chunks ----
+    start = time.time()
     candidate_chunks = await multi_query_retrieval(user_message, top_k_per_query=5, num_queries=3)
+    t1 = time.time()
+
+    logger.debug(f"Multi-query retrieval took {t1 - start:.2f}s")
 
     # Remove duplicate texts (keep order of first occurrence)
     seen = set()
@@ -35,6 +43,8 @@ async def chat(
 
     #----- RAG step 2: Rerank the chunks-----
     reranked_chunks= await rerank_chunks(user_message, unique_candidates, top_k = 4)
+    t2 = time.time()
+    logger.debug(f"Reranking took {t2 - t1:.2f}s")
 
     if not reranked_chunks:
         # No documents? Just answer without context.
@@ -64,7 +74,11 @@ async def chat(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
+    t3 = time.time()
+    logger.debug(f"LLM generation took {t3 - t2:.2f}s")
+
     # Return the answer + the sources so you can see what was retrieved
+    logger.info(f"Returning answer with {len(reranked_chunks)} sources")
     return ChatResponse(
         response=ai_message.content,
         sources=reranked_chunks,
