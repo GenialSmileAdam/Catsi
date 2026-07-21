@@ -5,6 +5,10 @@ from app.db.database import engine, Base
 from contextlib import asynccontextmanager
 from app.schemas.user import UserResponse
 from app.api.v1.dependencies import get_current_user
+from app.core.rate_limiter import limiter
+from fastapi.responses import JSONResponse
+from fastapi import Request
+from slowapi.errors import RateLimitExceeded
 from app.models.user import User
 import app.models
 import asyncio
@@ -34,6 +38,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(v1_router)
+
+# Attach the limiter to the app state (needed for the middleware)
+app.state.limiter = limiter
+
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+        headers={"Retry-After": str(exc.retry_after) if exc.retry_after else "60"},
+    )
+
 
 @app.get("/", tags=["health"])
 async def health_check():

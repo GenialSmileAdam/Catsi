@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.dependencies import get_db, get_current_user
 from app.models.user import User
@@ -6,14 +6,19 @@ from app.models.document import Document
 from app.schemas.document import DocumentUploadResponse
 from app.services.document_parser import validate_file, extract_text_from_file
 from app.services.document_processor import process_document_async
+from app.core.config import settings
 from app.services.chunking import chunk_text
 from app.services.vector_store import embed_and_store
 from sqlalchemy import select
+from app.core.rate_limiter import limiter, user_limiter
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")                 # per IP
+@user_limiter.limit("20/minute")
 async def upload_document(
+    request:Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -55,10 +60,15 @@ async def upload_document(
 
 
 @router.post("/{document_id}/chunk_store", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")                 # per IP
+@user_limiter.limit("20/minute")
 async def chunk_and_store(
+        request:Request,
         document_id: int,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
+        rate_limit: None = Depends(limiter.limit("5/minute")),
+        user_rate_limit: None = Depends(user_limiter.limit("10/minute")),
 ):
     """Chunk the document text, embed it, and store in ChromaDB."""
     # Fetch document, ensure it belongs to the user

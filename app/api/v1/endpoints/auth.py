@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 from app.models.user import User
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.rate_limiter import limiter, user_limiter
 from app.api.v1.dependencies import get_db
 from sqlalchemy import select
 
@@ -40,7 +41,12 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     return db_user
 
 @router.post("/login", response_model=Token)
-async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(
+        request : Request,
+        user_data: UserLogin,
+        db: AsyncSession = Depends(get_db),
+        ):
     """Authenticate user and return JWT token."""
     # Find user by username
     result = await db.execute(select(User).where(User.username == user_data.username))

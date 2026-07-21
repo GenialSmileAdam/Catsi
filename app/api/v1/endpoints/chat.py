@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from langchain_ollama import ChatOllama
 from app.core.config import settings
 from app.api.v1.dependencies import get_current_user
@@ -8,11 +8,15 @@ from app.schemas.chat import ChatResponse, ChatRequest
 from app.services.reranker import rerank_chunks
 from app.services.vector_store import multi_query_retrieval
 from langchain_core.messages import SystemMessage, HumanMessage
+from app.core.rate_limiter import limiter, user_limiter
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 @router.post("/", response_model=ChatResponse)
+@limiter.limit("10/minute")
+@user_limiter.limit("20/minute")
 async def chat(
+    request:Request,
     chat_request: ChatRequest,
     current_user: User = Depends(get_current_user),
 ):

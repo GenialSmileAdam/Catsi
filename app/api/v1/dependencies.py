@@ -6,7 +6,8 @@ from app.db.database import AsyncSessionLocal
 from app.models.user import User
 from app.core.security import decode_access_token
 from sqlalchemy import select
-
+from fastapi import Request
+from typing import Any
 # This tells FastAPI where to expect the token in the request (Authorization header)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -16,9 +17,10 @@ async def get_db():
         yield session
 
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-) -> User:
+) -> Any | None:
     """Dependency that returns the currently authenticated user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -37,4 +39,6 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    request.state.user_id = user.id
+
     return user
