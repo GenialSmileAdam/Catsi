@@ -2,6 +2,7 @@ import asyncio
 from sentence_transformers import CrossEncoder
 from langsmith import traceable
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +35,12 @@ async def rerank_chunks(query: str, chunks: list[str], top_k: int = 4) -> list[s
     # Build (query, chunk) pairs for the cross-encoder
     pairs = [(query, chunk) for chunk in chunks]
 
+    start = time.perf_counter()
     # model.predict is synchronous (CPU-bound). We run it in a thread pool.
     scores = await asyncio.to_thread(model.predict, pairs)
+    logger.info(
+        f"Predict took {time.perf_counter() - start:.3f} sec"
+    )
 
     # Combine chunk with its score, sort descending, take top_k
     scored_chunks = sorted(

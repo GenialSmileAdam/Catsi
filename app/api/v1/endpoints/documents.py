@@ -67,8 +67,6 @@ async def chunk_and_store(
         document_id: int,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
-        rate_limit: None = Depends(limiter.limit("5/minute")),
-        user_rate_limit: None = Depends(user_limiter.limit("10/minute")),
 ):
     """Chunk the document text, embed it, and store in ChromaDB."""
     # Fetch document, ensure it belongs to the user
